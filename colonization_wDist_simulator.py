@@ -21,15 +21,23 @@ nEvents = [] #the number of colonization events
 origin = []	#list for storing the first island
 avg = 0.0	#average number of colonization events required to generate the desired distribution
 nReps = 10000	#the number of simulation replicates to carry out
-file = open("Colonization.DistSquare.txt", "a")	#the file that holds the number of events per replicate
+file = open("Colonization.5of6islands.WithArea.txt", "a")	#the file that holds the number of events per replicate
 x = 0	#index
 v = 0	#index
 dist = {}	#empty dictionary to hold distances
-#area = {}	#empty disctionary for island areas... will be used in selecting the colonist
+area = []	#empty list for island areas... will be used in selecting the colonist
 nDists = 0	#the number of distances in the dataset
+DistScaler = 1 #set to 2 to square distances, otherwise, use 1
 
 #Distances among islands
-distFile = open('Distances.txt', "r")
+distFile = open('Dist.NoOceanic.txt', "r")
+areaFile = open('areas6islands.txt', 'r')
+
+#populate the list of areas
+for line in areaFile:
+	line = line.strip()
+	area.append(float(line))
+
 
 z = 0
 for line in distFile:
@@ -44,7 +52,7 @@ for line in distFile:
 		if z > 0 and len(values) != nCells: #verify that the distance matrix has the correct dimensions
 			sys.exit("The number of pairwise distances (" + str(len(values)) + ") in row " + str(z) + " is incorrect given the number of islands (" + str(nCells) + ").")
 		for element in values:
-			distances.append(float(element)**2)
+			distances.append(float(element)**DistScaler)
 		dist[z] = distances	#populate the dictionary of distances
 	z = z + 1
 
@@ -59,7 +67,7 @@ for key in dist.keys():
 		z = z + 1
 	z = 0
 	y = y + 1
-	
+
 y = 1
 z = 0
 for key in dist.keys():
@@ -80,9 +88,9 @@ for key in dist.keys():
 	z = 0
 	y = y + 1
 
-from dendropy import Tree, Node
-tree = Tree()
-extant_pop = []
+# from dendropy import Tree, Node
+# tree = Tree()
+# extant_pop = []
 
 ###########################
 ###colonization stuff begins here
@@ -100,8 +108,8 @@ for z in range(nReps):
 	firstIsland = random.randint(1, nCells) #randomly select an island to start from
 	origin.append(firstIsland) #store the island where the process starts
 
-	tree.seed_node.island_number = firstIsland
-	extant_pop.append(tree.seed_node)
+# 	tree.seed_node.island_number = firstIsland
+# 	extant_pop.append(tree.seed_node)
 
 	for i in range(nCells):
 		if (i + 1) == firstIsland:
@@ -112,6 +120,7 @@ for z in range(nReps):
 	while len(colonized) < nPres: #run until all islands to be colonized have been colonized
 		k = k + 1
 		colonized = []	#list of colonized islands
+		area_of_colonized_islands = [] #probabilites for selecting source of colonist
 		for j in range(len(occupancy)):
 			if occupancy[j] == 1:
 				colonized.append(j + 1) #island names are 1 to n, not 0 to n
@@ -119,25 +128,43 @@ for z in range(nReps):
 		if len(colonized) == 1:
 			colonist = colonized[0]
 		else:
-			colonist = colonized[random.randrange(1, len(colonized))]	#select a potential colonist
-
-
-		parent_pop = this_is_the_function_that_returns_the_source_population(extant_pop, colonist)
-		stationary_child = Node()
-		migrating_child = Node()
-		stationary_child.island_number = parent_pop.island_number
- 
+			for element in colonized:
+				area_of_colonized_islands.append(area[element-1])
+			z = 0
+			for element in area_of_colonized_islands:
+				if z > 0:
+					area_of_colonized_islands[z] = area_of_colonized_islands[z] + area_of_colonized_islands[z-1]
+				z += 1
+			
+			z = 0
+			for element in area_of_colonized_islands:
+				area_of_colonized_islands[z] = area_of_colonized_islands[z] / area_of_colonized_islands[len(area_of_colonized_islands)-1]
+				z += 1
+				
+			colonist = random.random()	#select a colonist
+			z = 0
+			for element in area_of_colonized_islands:
+				if colonist <= element:
+					colonist = colonized[z]
+					break
+				z += 1
 	
-		select_the_recipient = random.random()	#select the receiving island
-
-		migrating_child.island_number = select_the_recipient
- 
-		parent_pop.add_child(migrating_child)
-		parent_pop.add_child(stationary_child)
- 
-		extant_pop.remove(parent_pop)
-		extant_pop.append(migrating_child)
-		extant_pop.remove(stationary_child)
+# 		parent_pop = this_is_the_function_that_returns_the_source_population(extant_pop, colonist)
+# 		stationary_child = Node()
+# 		migrating_child = Node()
+# 		stationary_child.island_number = parent_pop.island_number
+#  
+# 	
+ 		select_the_recipient = random.random()	#select the receiving island
+# 
+# 		migrating_child.island_number = select_the_recipient
+#  
+# 		parent_pop.add_child(migrating_child)
+# 		parent_pop.add_child(stationary_child)
+#  
+# 		extant_pop.remove(parent_pop)
+# 		extant_pop.append(migrating_child)
+# 		extant_pop.remove(stationary_child)
 		
 		z = 0
 		for i in dist[colonist]:
@@ -151,7 +178,7 @@ for z in range(nReps):
 						recipient = z + 1
 						break
 			z = z + 1
-			
+
 		if occupancy[recipient - 1] == 0:
 			occupancy[recipient - 1] = 1
 
@@ -184,6 +211,6 @@ print "islands colonized is",
 print avg
 print "The standard deviation under these settings is",
 print stdev
-print tree
+#print tree
 for s in range(len(nEvents)):
 	file.write(str(nEvents[s]) + "\t" + str(origin[s]) + "\n")
